@@ -26,7 +26,7 @@ def mostrar_menu():
     print("salir - Para terminar el programa")
     print("===============================")
 
-def ejecutar_ejercicio(opcion):
+def ejecutar_ejercicio(opcion: str):
     """Ejecuta el ejercicio segun la opcion seleccionada"""
     # Diccionario que mapea opciones con funciones
     ejercicios = {
