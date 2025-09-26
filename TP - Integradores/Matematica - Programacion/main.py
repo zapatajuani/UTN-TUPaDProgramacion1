@@ -3,70 +3,90 @@ print("====================== GENERADOR DE TABLAS DE VERDAD ====================
 print("Ingrese AND, OR, NOT, XOR, NAND, NOR como operadores logicos para visualizar")
 print("los esquemas de las tablas de verdad correspondientes.")
 print("Ingrese la declaracion logica (use + para OR, * para AND, ~ para NOT): ")
-print("Ejemplo: A * (B + ~C)")
+print("Ejemplo: A * (B + ~C)\n")
 
+# puertas logicas reconocidas
 PUERTAS_LOGICAS = ['AND', 'OR', 'NOT', 'XOR', 'NAND', 'NOR']
+
+# valores booleanos posibles
 booleanos = [0, 1]
-
-while True:
-    # leer la linea ingresada por el usuario
-    input_str = input()
-
-    if input_str.upper() in PUERTAS_LOGICAS:
-        if input_str.lower() == "and":
-            print("\nTABLA DE VERDAD AND")
-            print("P\tQ\tP and Q")
-            for p in booleanos:
-                for q in booleanos:
-                    print(f"{p}\t{q}\t{p and q}")
-
-        elif input_str.lower() == "or":
-            print("\nTABLA DE VERDAD OR")
-            print("P\tQ\tP or Q")
-            for p in booleanos:
-                for q in booleanos:
-                    print(f"{p}\t{q}\t{p or q}")
-
-        elif input_str.lower() == "not":
-            print("\nTABLA DE VERDAD NOT")
-            print("P\t¬P")
-            for p in booleanos:
-                print(f"{p}\t{int(not p)}")
-
-        elif input_str.lower() == "xor":
-            print("\nTABLA DE VERDAD XOR")
-            print("P\tQ\tP xor Q")
-            for p in booleanos:
-                for q in booleanos:
-                    print(f"{p}\t{q}\t{p ^ q}")
-
-        elif input_str.lower() == "nand":
-            print("\nTABLA DE VERDAD NAND")
-            print("P\tQ\tP nand Q")
-            for p in booleanos:
-                for q in booleanos:
-                    print(f"{p}\t{q}\t{int(not (p and q))}")
-
-        elif input_str.lower() == "nor":
-            print("\nTABLA DE VERDAD NOR")
-            print("P\tQ\tP nor Q")
-            for p in booleanos:
-                for q in booleanos:
-                    print(f"{p}\t{q}\t{int(not (p or q))}")
-
-    else:
-        # si la entrada no es una puerta logica, salir del bucle para procesar la expresion
-        break
-
-
-# quitar espacios y pasar a mayusculas para normalizar
-declaracion = input_str.replace(" ", "").upper()
 
 # simbolos reconocidos en la declaracion
 SIMBOLOS = ['+', '*', '~', '(', ')']
 
 # operadores logicos considerados
 OPERADORES = ['+', '*', '~']
+
+# variables
+VARIABLES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+             "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+
+while True:
+    # leer la linea ingresada por el usuario
+    input_str = input()
+
+    # si la entrada es una puerta logica, mostrar su tabla de verdad
+    if input_str.upper() in PUERTAS_LOGICAS:
+        if input_str.lower() == "and":
+            print("\nTABLA DE VERDAD AND")
+            print("P | Q | P and Q")
+            print("---------------")
+            for p in booleanos:
+                for q in booleanos:
+                    print(f"{p} | {q} | {str(p and q).center(7)}")
+            print()
+
+        elif input_str.lower() == "or":
+            print("\nTABLA DE VERDAD OR")
+            print("P | Q | P or Q")
+            print("--------------")
+            for p in booleanos:
+                for q in booleanos:
+                    print(f"{p} | {q} | {str(p or q).center(6)}")
+            print()
+
+        elif input_str.lower() == "not":
+            print("\nTABLA DE VERDAD NOT")
+            print("P | not P ")
+            print("----------")
+            for p in booleanos:
+                print(f"{p} | {str(int(not p)).center(6)}")
+            print()
+
+        elif input_str.lower() == "xor":
+            print("\nTABLA DE VERDAD XOR")
+            print("P | Q | P xor Q")
+            print("---------------")
+            for p in booleanos:
+                for q in booleanos:
+                    print(f"{p} | {q} | {str(p ^ q).center(7)}")
+            print()
+
+        elif input_str.lower() == "nand":
+            print("\nTABLA DE VERDAD NAND")
+            print("P | Q | P nand Q")
+            print("----------------")
+            for p in booleanos:
+                for q in booleanos:
+                    print(f"{p} | {q} | {str(int(not (p and q))).center(8)}")
+            print()
+
+        elif input_str.lower() == "nor":
+            print("\nTABLA DE VERDAD NOR")
+            print("P | Q | P nor Q")
+            print("---------------")
+            for p in booleanos:
+                for q in booleanos:
+                    print(f"{p} | {q} | {int(not (p or q))}")
+            print()
+
+    # si la entrada no es una puerta logica, salir del bucle para procesar la expresion
+    elif input_str.strip() == "" or not all(c not in SIMBOLOS + VARIABLES for c in input_str):
+        break
+
+
+# quitar espacios y pasar a mayusculas para normalizar
+declaracion = input_str.replace(" ", "").upper()
 
 # lista para guardar las variables encontradas
 variables: list[str] = []
