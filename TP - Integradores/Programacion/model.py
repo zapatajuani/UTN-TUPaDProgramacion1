@@ -3,6 +3,13 @@ from typing import List, Dict
 
 # Utilidades
 
+def check_file(file_path: str) -> None:
+    paises = cargar_paises(file_path)
+    if not paises:
+        with open(file_path, mode='w', encoding='utf-8', newline='') as csvfile:
+            fieldnames = ['nombre', 'poblacion', 'superficie', 'continente']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
 
 def cantidad_de_paises(path: str) -> int:
     with open(path, mode='r', encoding='utf-8') as csvfile:
@@ -109,24 +116,24 @@ def filtrar_por_continente(
 
 
 def filtrar_por_rango_poblacion(
-    paises: List[Dict[str, str]], min_poblacion: int, max_poblacion: int
+    paises: List[Dict[str, str]], min_poblacion: int | None, max_poblacion: int | None
 ) -> List[Dict[str, str]]:
     resultado = []
     for pais in paises:
         poblacion = int(pais['poblacion'])
-        if min_poblacion <= poblacion <= max_poblacion:
+        if (min_poblacion is None or min_poblacion <= poblacion) and (max_poblacion is None or poblacion <= max_poblacion):
             resultado.append(pais)
 
     return resultado
 
 
 def filtrar_por_rango_superficie(
-    paises: List[Dict[str, str]], min_superficie: int, max_superficie: int
+    paises: List[Dict[str, str]], min_superficie: int | None, max_superficie: int | None
 ) -> List[Dict[str, str]]:
     resultado = []
     for pais in paises:
         superficie = int(pais['superficie'])
-        if min_superficie <= superficie <= max_superficie:
+        if (min_superficie is None or min_superficie <= superficie) and (max_superficie is None or superficie <= max_superficie):
             resultado.append(pais)
 
     return resultado

@@ -7,7 +7,11 @@ from model import (
     cantidad_de_paises,
     buscar_pais_por_nombre,
     agregar_pais,
-    actualizar_pais as actualizar_pais_model
+    actualizar_pais as actualizar_pais_model,
+    filtrar_por_continente,
+    filtrar_por_rango_poblacion,
+    filtrar_por_rango_superficie,
+    check_file
 )
 
 HEADER_HEIGHT = 3
@@ -20,6 +24,81 @@ FILTRO_CONTINENTE = ['Todos', 'America del Sur', 'America del Norte',
 #############################################################
 # Utilidades
 #############################################################
+
+
+def key_value_for_sorting_poblacion(x):
+    return int(x['poblacion'])
+
+
+def key_value_for_sorting_superficie(x):
+    return int(x['superficie'])
+
+
+def calcular_estadisticas(
+    paises: List[Dict[str, str]] | tuple[bool, str]
+) -> Dict[str, Any] | bool:
+    match paises:
+
+        case (False, _):
+            return False
+
+        case list():
+            total_paises = len(paises)
+
+            if total_paises == 0:
+                return {
+                    'total_paises': 0,
+                    'promedio_poblacion': 0,
+                    'promedio_superficie': 0
+                }
+
+            suma_poblacion = sum(int(pais['poblacion']) for pais in paises)
+            suma_superficie = sum(int(pais['superficie']) for pais in paises)
+
+            promedio_poblacion = suma_poblacion / total_paises
+            promedio_superficie = suma_superficie / total_paises
+
+            estadisticas = {
+                'total': {
+                    'cant_paises': total_paises,
+                    'prom_poblacion': promedio_poblacion,
+                    'prom_superficie': promedio_superficie
+                }
+            }
+
+            for continente in FILTRO_CONTINENTE:
+                if continente == 'Todos':
+                    continue
+
+                cant_de_paises = sum(
+                    1 for pais in paises if pais['continente'] == continente)
+
+                estadisticas[continente.lower().replace(' ', '_')] = {
+                    'cant_paises': cant_de_paises,
+                    'prom_poblacion': sum(
+                        int(pais['poblacion']) for pais in paises if pais['continente'] == continente) / cant_de_paises if cant_de_paises > 0 else 0,
+                    'prom_superficie': sum(
+                        int(pais['superficie']) for pais in paises if pais['continente'] == continente) / cant_de_paises if cant_de_paises > 0 else 0
+                }
+
+            estadisticas['pais_mayor_poblacion'] = sorted(
+                paises, key=key_value_for_sorting_poblacion)[-1]
+            estadisticas['pais_menor_poblacion'] = sorted(
+                paises, key=key_value_for_sorting_poblacion)[0]
+            estadisticas['pais_mayor_superficie'] = sorted(
+                paises, key=key_value_for_sorting_superficie)[-1]
+            estadisticas['pais_menor_superficie'] = sorted(
+                paises, key=key_value_for_sorting_superficie)[0]
+
+            return estadisticas
+
+        case _:
+
+            return {
+                'total_paises': 0,
+                'promedio_poblacion': 0,
+                'promedio_superficie': 0
+            }
 
 
 def reset_esquema_and_values() -> tuple[Dict[str, str], str, str]:
@@ -92,6 +171,7 @@ def editar_registrar_pais(
 
 def proceso_carga_datos(
     nombre: str,
+    filters_obj: Dict[str, Any]
 ) -> List[Dict[str, str]] | tuple[bool, str]:
     paises = cargar_paises('paises.csv')
 
@@ -99,6 +179,39 @@ def proceso_carga_datos(
         paises = buscar_pais_por_nombre(nombre, paises)
         if paises[0] is None:
             return False, str(paises[1])
+
+    if filters_obj['continente'] and filters_obj['continente'] != 'Todos':
+        paises = filtrar_por_continente(paises, filters_obj['continente'])
+
+    if filters_obj['rango_poblacion'][0] or filters_obj['rango_poblacion'][1]:
+        paises = filtrar_por_rango_poblacion(
+            paises,
+            int(filters_obj['rango_poblacion'][0]
+                ) if filters_obj['rango_poblacion'][0] else None,
+            int(filters_obj['rango_poblacion'][1]
+                ) if filters_obj['rango_poblacion'][1] else None
+        )
+
+    if filters_obj['rango_superficie'][0] or filters_obj['rango_superficie'][1]:
+        paises = filtrar_por_rango_superficie(
+            paises,
+            int(filters_obj['rango_superficie'][0]
+                ) if filters_obj['rango_superficie'][0] else None,
+            int(filters_obj['rango_superficie'][1]
+                ) if filters_obj['rango_superficie'][1] else None
+        )
+
+    if filters_obj['poblacion_orden']:
+        paises.sort(
+            key=key_value_for_sorting_poblacion,
+            reverse=(filters_obj['poblacion_orden'] == 'desc')
+        )
+
+    if filters_obj['superficie_orden']:
+        paises.sort(
+            key=key_value_for_sorting_superficie,
+            reverse=(filters_obj['superficie_orden'] == 'desc')
+        )
 
     return paises
 
@@ -143,28 +256,101 @@ def filtrar_paises(
     filter_selector: tuple[int, int]
 ) -> tuple[Dict[str, Any], tuple[int, int]]:
 
-    if user_input == 'KEY_UP':
-        filter_selector = (
-            max(0, filter_selector[0] - 1),
-            filter_selector[1]
-        )
-    elif user_input == 'KEY_DOWN':
-        filter_selector = (
-            min(6, filter_selector[0] + 1),
-            filter_selector[1]
-        )
-    elif user_input == 'KEY_LEFT':
-        if filter_selector[0] == 0:
+    match user_input:
+        case 'KEY_UP':
             filter_selector = (
-                filter_selector[0],
-                max(0, filter_selector[1] - 1)
+                max(0, filter_selector[0] - 1),
+                filter_selector[1]
             )
-    elif user_input == 'KEY_RIGHT':
-        if filter_selector[0] == 0:
+        case 'KEY_DOWN':
             filter_selector = (
-                filter_selector[0],
-                min(len(FILTRO_CONTINENTE) - 1, filter_selector[1] + 1)
+                min(8, filter_selector[0] + 1),
+                filter_selector[1]
             )
+        case 'KEY_LEFT':
+            if filter_selector[0] == 0:
+                filter_selector = (
+                    filter_selector[0],
+                    max(0, filter_selector[1] - 1)
+                )
+        case 'KEY_RIGHT':
+            if filter_selector[0] == 0:
+                filter_selector = (
+                    filter_selector[0],
+                    min(len(FILTRO_CONTINENTE) - 1, filter_selector[1] + 1)
+                )
+
+    # Aplicar filtros según la selección
+    match filter_selector[0]:
+        case 0:
+            filters_obj['continente'] = FILTRO_CONTINENTE[filter_selector[1]]
+        case 1:
+            if user_input.isdigit():
+                filters_obj['rango_poblacion'] = (
+                    filters_obj['rango_poblacion'][0] + user_input,
+                    filters_obj['rango_poblacion'][1]
+                )
+
+            if user_input == "KEY_BACKSPACE":
+                filters_obj['rango_poblacion'] = (
+                    filters_obj['rango_poblacion'][0][:-1],
+                    filters_obj['rango_poblacion'][1]
+                )
+        case 2:
+            if user_input.isdigit():
+                filters_obj['rango_poblacion'] = (
+                    filters_obj['rango_poblacion'][0],
+                    filters_obj['rango_poblacion'][1] + user_input
+                )
+
+            if user_input == "KEY_BACKSPACE":
+                filters_obj['rango_poblacion'] = (
+                    filters_obj['rango_poblacion'][0],
+                    filters_obj['rango_poblacion'][1][:-1]
+                )
+        case 3:
+            if user_input == '\n':
+                filters_obj['poblacion_orden'] = 'desc' if filters_obj['poblacion_orden'] != 'desc' else None
+                filters_obj['superficie_orden'] = None
+        case 4:
+            if user_input == '\n':
+                filters_obj['poblacion_orden'] = 'asc' if filters_obj['poblacion_orden'] != 'asc' else None
+                filters_obj['superficie_orden'] = None
+        case 5:
+            if user_input.isdigit():
+                filters_obj['rango_superficie'] = (
+                    filters_obj['rango_superficie'][0] + user_input,
+                    filters_obj['rango_superficie'][1]
+                )
+
+            if user_input == "KEY_BACKSPACE":
+                filters_obj['rango_superficie'] = (
+                    filters_obj['rango_superficie'][0][:-1],
+                    filters_obj['rango_superficie'][1]
+                )
+        case 6:
+            if user_input.isdigit():
+                filters_obj['rango_superficie'] = (
+                    filters_obj['rango_superficie'][0],
+                    filters_obj['rango_superficie'][1] + user_input
+                )
+
+            if user_input == "KEY_BACKSPACE":
+                filters_obj['rango_superficie'] = (
+                    filters_obj['rango_superficie'][0],
+                    filters_obj['rango_superficie'][1][:-1]
+                )
+        case 7:
+            if user_input == '\n':
+                filters_obj['superficie_orden'] = 'desc' if filters_obj['superficie_orden'] != 'desc' else None
+                filters_obj['poblacion_orden'] = None
+        case 8:
+            if user_input == '\n':
+                filters_obj['superficie_orden'] = 'asc' if filters_obj['superficie_orden'] != 'asc' else None
+                filters_obj['poblacion_orden'] = None
+
+        case _:
+            pass
 
     return filters_obj, filter_selector
 
@@ -401,9 +587,9 @@ def filters_menu(
     filter_selector: tuple[int, int]
 ) -> None:
     filters = curses.newwin(
-        27,
+        30,
         int(width * 0.8),
-        int(height * 0.2),
+        HEADER_HEIGHT + 3,
         int(width * 0.1)
     )
     filters.bkgd(' ', curses.color_pair(1))
@@ -413,7 +599,7 @@ def filters_menu(
     # Filtro Continente
     filters.addstr(3, 2, "Continente",
                    curses.A_UNDERLINE if filter_selector[0] == 0 else 0)
-    
+
     filters.addstr(3, 13, f"{(int(width * 0.8)-15) * '-'}")
 
     for idx, continente in enumerate(FILTRO_CONTINENTE):
@@ -422,55 +608,133 @@ def filters_menu(
         if filtros_seleccionados == continente or (filtros_seleccionados is None and continente == 'Todos'):
             estilo |= curses.A_BOLD
 
-        row = 4 + (idx // 4)
+        row = 5 + (idx // 4)
         col = 4 + (20 * (idx % 4))
 
         filters.addstr(row, col, continente, estilo)
 
     # Filtro Rango Población
-    filters.addstr(7, 2, "Filtro Población",
+    filters.addstr(8, 2, "Filtro Población")
+    filters.addstr(8, 19, f"{(int(width * 0.8)-21) * '-'}")
+
+    filters.addstr(10, 4, f"Min: {filters_obj['rango_poblacion'][0] or 'N/A'}",
                    curses.A_UNDERLINE if filter_selector[0] == 1 else 0)
-    
-    filters.addstr(7, 19, f"{(int(width * 0.8)-21) * '-'}")
-
-    filters.addstr(8, 4, f"Min: {filters_obj['rango_poblacion'][0] or 'N/A'}")
-    filters.addstr(8, 40, f"Max: {filters_obj['rango_poblacion'][1] or 'N/A'}")
-
-    filters.addstr(10, 4, "Ordenar Mayor a menor",
+    filters.addstr(11, 4, f"Max: {filters_obj['rango_poblacion'][1] or 'N/A'}",
                    curses.A_UNDERLINE if filter_selector[0] == 2 else 0)
-    filters.addstr(
-        10, 26, f"{'[X]' if filters_obj['poblacion_orden'] == 'desc' else '[ ]'}")
 
-    filters.addstr(12, 4, "Ordenar Menor a mayor",
+    filters.addstr(13, 4, "Ordenar Mayor a menor",
                    curses.A_UNDERLINE if filter_selector[0] == 3 else 0)
     filters.addstr(
-        12, 26, f"{'[X]' if filters_obj['poblacion_orden'] == 'asc' else '[ ]'}")
+        13, 26, f"{'[X]' if filters_obj['poblacion_orden'] == 'desc' else '[ ]'}")
+
+    filters.addstr(15, 4, "Ordenar Menor a mayor",
+                   curses.A_UNDERLINE if filter_selector[0] == 4 else 0)
+    filters.addstr(
+        15, 26, f"{'[X]' if filters_obj['poblacion_orden'] == 'asc' else '[ ]'}")
 
     # Filtro Rango Superficie
-    filters.addstr(14, 2, "Rango Superficie",
-                   curses.A_UNDERLINE if filter_selector[0] == 4 else 0)
-    
-    filters.addstr(14, 19, f"{(int(width * 0.8)-21) * '-'}")
+    filters.addstr(17, 2, "Rango Superficie")
+    filters.addstr(17, 19, f"{(int(width * 0.8)-21) * '-'}")
 
-    filters.addstr(
-        15, 4, f"Min: {filters_obj['rango_superficie'][0] or 'N/A'}")
-    filters.addstr(
-        15, 40, f"Max: {filters_obj['rango_superficie'][1] or 'N/A'}")
-
-    filters.addstr(17, 4, "Ordenar Mayor a menor",
+    filters.addstr(19, 4, f"Min: {filters_obj['rango_superficie'][0] or 'N/A'}",
                    curses.A_UNDERLINE if filter_selector[0] == 5 else 0)
-    filters.addstr(
-        17, 26, f"{'[X]' if filters_obj['superficie_orden'] == 'desc' else '[ ]'}")
-
-    filters.addstr(19, 4, "Ordenar Menor a mayor",
+    filters.addstr(20, 4, f"Max: {filters_obj['rango_superficie'][1] or 'N/A'}",
                    curses.A_UNDERLINE if filter_selector[0] == 6 else 0)
+
+    filters.addstr(22, 4, "Ordenar Mayor a menor",
+                   curses.A_UNDERLINE if filter_selector[0] == 7 else 0)
     filters.addstr(
-        19, 26, f"{'[X]' if filters_obj['superficie_orden'] == 'asc' else '[ ]'}")
+        22, 26, f"{'[X]' if filters_obj['superficie_orden'] == 'desc' else '[ ]'}")
+
+    filters.addstr(24, 4, "Ordenar Menor a mayor",
+                   curses.A_UNDERLINE if filter_selector[0] == 8 else 0)
+    filters.addstr(
+        24, 26, f"{'[X]' if filters_obj['superficie_orden'] == 'asc' else '[ ]'}")
 
     filters.addstr(
-        22, 2, "Presione F8 para cerrar los filtros. Enter para aplicar o intercalar.")
+        27, 2, "Presione F8 para cerrar los filtros. Enter para aplicar o intercalar.")
 
     filters.refresh()
+
+
+def menu_estadisticas(
+    width: int,
+    estadisticas: Dict[str, Any] | bool,
+) -> None:
+    info = curses.newwin(
+        23,
+        int(width * 0.9),
+        HEADER_HEIGHT + 3,
+        int(width * 0.05)
+    )
+    info.bkgd(' ', curses.color_pair(1))
+    info.border()
+
+    if not estadisticas:
+        info.addstr(
+            1,
+            2,
+            "No se pudieron calcular las estadísticas debido a un error o falta de datos.",
+            curses.color_pair(3)
+        )
+        info.refresh()
+        return
+
+    if isinstance(estadisticas, dict):
+        info.addstr(1, 2, "Estadísticas", curses.A_BOLD | curses.A_UNDERLINE)
+
+        info.addstr(3, 2, "Continente")
+        info.addstr(3, 22, "Cantidad de Países")
+        info.addstr(3, 50, "Promedio Población")
+        info.addstr(3, 75, "Promedio Superficie [km²]")
+        info.hline(4, 1, curses.ACS_HLINE, info.getmaxyx()[1] - 2)
+
+        fila = 5
+        for key, stats in estadisticas.items():
+            if key in [
+                'pais_mayor_poblacion',
+                'pais_menor_poblacion',
+                'pais_mayor_superficie',
+                'pais_menor_superficie'
+            ]:
+                continue
+
+            continente_display = key.replace(
+                '_', ' ').title() if key != 'total' else 'Total'
+            info.addstr(fila, 2, continente_display)
+            info.addstr(fila, 22, str(stats['cant_paises']))
+            info.addstr(fila, 50, f"{stats['prom_poblacion']:.2f}")
+            info.addstr(fila, 75, f"{stats['prom_superficie']:.2f}")
+            fila += 1
+        info.hline(fila, 1, curses.ACS_HLINE, info.getmaxyx()[1] - 2)
+
+        info.addstr(
+            fila + 2, 2,
+            f"Pais con mayor población: {estadisticas['pais_mayor_poblacion']['nombre']}"
+        )
+
+        info.addstr(
+            fila + 3, 2,
+            f"Pais con menor población: {estadisticas['pais_menor_poblacion']['nombre']}"
+        )
+
+        info.addstr(
+            fila + 5, 2,
+            f"Pais con mayor superficie: {estadisticas['pais_mayor_superficie']['nombre']}"
+        )
+
+        info.addstr(
+            fila + 6, 2,
+            f"Pais con menor superficie: {estadisticas['pais_menor_superficie']['nombre']}"
+        )
+
+        info.addstr(
+            21, 2,
+            "Presione F9 para cerrar el reporte de estadísticas."
+        )
+
+    info.refresh()
+
 
 ############################################################
 # Layout de la aplicación
@@ -591,16 +855,20 @@ def main(main_window: curses.window) -> None:
     mostrar_filtros = False
     filters_obj = {
         'continente': None,
-        'rango_poblacion': (None, None),
+        'rango_poblacion': ('', ''),
         'poblacion_orden': None,
-        'rango_superficie': (None, None),
+        'rango_superficie': ('', ''),
         'superficie_orden': None
     }
     filter_selector = (0, 0)
 
+    # estadisticas
+    mostrar_estadisticas = False
+
     while True:
         paises = proceso_carga_datos(
-            nombre=search_query
+            nombre=search_query,
+            filters_obj=filters_obj,
         )
 
         height, width = main_window.getmaxyx()
@@ -632,6 +900,10 @@ def main(main_window: curses.window) -> None:
         if mostrar_filtros:
             filters_menu(width, height, filters_obj, filter_selector)
 
+        if mostrar_estadisticas:
+            estadisticas = calcular_estadisticas(paises)
+            menu_estadisticas(width, estadisticas)
+
         user_input = main_window.getkey()
 
         match user_input:
@@ -646,11 +918,13 @@ def main(main_window: curses.window) -> None:
             case 'KEY_F(8)':
                 mostrar_filtros = not mostrar_filtros
                 filter_selector = (0, 0)
+            case 'KEY_F(9)':
+                mostrar_estadisticas = not mostrar_estadisticas
             case 'KEY_LEFT':
-                if not mostrar_filtros:
+                if not mostrar_filtros and not mostrar_estadisticas:
                     pag_num = max(0, pag_num - 1)
             case 'KEY_RIGHT':
-                if not mostrar_filtros:
+                if not mostrar_filtros and not mostrar_estadisticas:
                     pag_num = min(total_paginas - 1, pag_num + 1)
             case 'KEY_F(10)':
                 if screen == 'main':
@@ -687,6 +961,9 @@ def main(main_window: curses.window) -> None:
 #############################################################
 
 def start_app():
+    # Chequear estadaod de archivo
+    check_file('paises.csv')
+
     # Wrapper para inicializar y restaurar la terminal de forma segura
     curses.wrapper(main)
 
