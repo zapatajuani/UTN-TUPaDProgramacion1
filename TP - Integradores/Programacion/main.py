@@ -1,13 +1,21 @@
 import curses
 from curses.textpad import Textbox, rectangle
 import time
-from typing import Dict, List
-from model import cargar_paises, cantidad_de_paises, buscar_pais_por_nombre, agregar_pais
+from typing import Any, Dict, List
+from model import (
+    cargar_paises,
+    cantidad_de_paises,
+    buscar_pais_por_nombre,
+    agregar_pais,
+    actualizar_pais as actualizar_pais_model
+)
 
 HEADER_HEIGHT = 3
 FOOTER_HEIGHT = 4
 MAIN_MENU_HEIGHT_CORRECTION = 4
 VALORES_ESQUEMA = ['nombre', 'poblacion', 'superficie', 'continente']
+FILTRO_CONTINENTE = ['Todos', 'America del Sur', 'America del Norte',
+                     'Europa', 'Asia', 'Africa', 'Oceania']
 
 #############################################################
 # Utilidades
@@ -23,11 +31,12 @@ def reset_esquema_and_values() -> tuple[Dict[str, str], str, str]:
     }, "", VALORES_ESQUEMA[0]
 
 
-def nuevo_pais(
+def editar_registrar_pais(
     screen: str,
     user_input: str,
     campo_actual: str,
-    esquema: Dict[str, str]
+    esquema: Dict[str, str],
+    edicion: bool = False
 ) -> tuple[str, Dict[str, str], str, str]:
     status_msg = ""
 
@@ -67,7 +76,8 @@ def nuevo_pais(
             if not all(esquema.values()):  # Revisa si algún valor es ""
                 status_msg = "Error: No se permiten campos vacíos."
             else:
-                res = agregar_pais(esquema)
+                res = agregar_pais(
+                    esquema) if not edicion else actualizar_pais_model(esquema)
                 if res[0]:
                     # Éxito: limpiar formulario y volver al main
                     esquema = {key: '' for key in VALORES_ESQUEMA}
@@ -75,7 +85,7 @@ def nuevo_pais(
                     campo_actual = VALORES_ESQUEMA[0]
                     screen = 'main'
                 else:
-                    status_msg = f"Error al agregar país: {res[1]}"
+                    status_msg = f"Error al {'actualizar' if edicion else 'agregar'} país: {res[1]}"
 
     return screen, esquema, status_msg, campo_actual
 
@@ -119,12 +129,44 @@ def lineas_disponibles(height: int) -> int:
 def paginas(lineas_disponibles: int) -> int:
     total_paises = cantidad_de_paises('paises.csv')
 
-    total_paginas = (total_paises // lineas_disponibles)
+    total_paginas = total_paises // lineas_disponibles
 
     if total_paises % lineas_disponibles != 0:
         total_paginas += 1
 
     return total_paginas
+
+
+def filtrar_paises(
+    user_input: str,
+    filters_obj: Dict[str, Any],
+    filter_selector: tuple[int, int]
+) -> tuple[Dict[str, Any], tuple[int, int]]:
+
+    if user_input == 'KEY_UP':
+        filter_selector = (
+            max(0, filter_selector[0] - 1),
+            filter_selector[1]
+        )
+    elif user_input == 'KEY_DOWN':
+        filter_selector = (
+            min(6, filter_selector[0] + 1),
+            filter_selector[1]
+        )
+    elif user_input == 'KEY_LEFT':
+        if filter_selector[0] == 0:
+            filter_selector = (
+                filter_selector[0],
+                max(0, filter_selector[1] - 1)
+            )
+    elif user_input == 'KEY_RIGHT':
+        if filter_selector[0] == 0:
+            filter_selector = (
+                filter_selector[0],
+                min(len(FILTRO_CONTINENTE) - 1, filter_selector[1] + 1)
+            )
+
+    return filters_obj, filter_selector
 
 ############################################################
 # Componentes de la interfaz de usuario
@@ -144,12 +186,14 @@ def main_footer(
     width: int,
     height: int,
     num_pag: int,
+    search_query: str = "",
     action_active: bool = False
 ) -> curses.window:
     footer_win = curses.newwin(FOOTER_HEIGHT, width, height - FOOTER_HEIGHT, 0)
     footer_win.bkgd(' ', curses.color_pair(1))  # Poner otro color
 
-    footer_win.addstr(1, 2, "F2 Buscar | ")
+    footer_win.addstr(
+        1, 2, f"{'F2 Reset  | ' if search_query else 'F2 Buscar | '}")
     footer_win.addstr(1, 14, "F4 Agregar | ")
     footer_win.addstr(1, 27, "F7 Actualizar | ")
     footer_win.addstr(1, 43, "F8 Filtrar | ")
@@ -298,16 +342,150 @@ def add_menu(
 
     return add_win
 
+
+def update_menu(
+    width: int,
+    height: int,
+    nuevo_pais: Dict[str, str],
+    status_msg: str,
+    campo_actual: str
+) -> curses.window:
+    update_height = height - (HEADER_HEIGHT + FOOTER_HEIGHT)
+
+    update_win = curses.newwin(update_height, width, HEADER_HEIGHT, 0)
+    update_win.bkgd(' ', curses.color_pair(2))  # Poner color de fondo
+    update_win.border()
+
+    update_win.addstr(1, 2, "Actualizar un país existente: ")
+    update_win.addstr(
+        3, 2, "Nombre:",
+        curses.A_UNDERLINE if campo_actual == 'nombre' else 0
+    )
+    update_win.addstr(
+        4, 2, "Población:",
+        curses.A_UNDERLINE if campo_actual == 'poblacion' else 0
+    )
+    update_win.addstr(
+        5, 2, "Superficie [km²]:",
+        curses.A_UNDERLINE if campo_actual == 'superficie' else 0
+    )
+    update_win.addstr(
+        6, 2, "Continente:",
+        curses.A_UNDERLINE if campo_actual == 'continente' else 0
+    )
+
+    if nuevo_pais.get('nombre') is not None:
+        update_win.addstr(3, 20, str(nuevo_pais.get('nombre', '')),)
+    if nuevo_pais.get('poblacion') is not None:
+        update_win.addstr(4, 20, str(nuevo_pais.get('poblacion', '')),)
+    if nuevo_pais.get('superficie') is not None:
+        update_win.addstr(5, 20, str(nuevo_pais.get('superficie', '')),)
+    if nuevo_pais.get('continente') is not None:
+        update_win.addstr(6, 20, str(nuevo_pais.get('continente', '')),)
+
+    rectangle(update_win, 2, 1, 7, width - 2)
+
+    update_win.addstr(
+        8, 2, "Presione Enter para avanzar entre campos y enviar el formulario.")
+
+    if status_msg:
+        update_win.addstr(10, 2, status_msg, curses.color_pair(3))
+
+    return update_win
+
+
+def filters_menu(
+    width: int,
+    height: int,
+    filters_obj: Dict[str, Any],
+    filter_selector: tuple[int, int]
+) -> None:
+    filters = curses.newwin(
+        27,
+        int(width * 0.8),
+        int(height * 0.2),
+        int(width * 0.1)
+    )
+    filters.bkgd(' ', curses.color_pair(1))
+    filters.border()
+
+    filters.addstr(1, 2, "Filtros", curses.A_BOLD | curses.A_UNDERLINE)
+    # Filtro Continente
+    filters.addstr(3, 2, "Continente",
+                   curses.A_UNDERLINE if filter_selector[0] == 0 else 0)
+    
+    filters.addstr(3, 13, f"{(int(width * 0.8)-15) * '-'}")
+
+    for idx, continente in enumerate(FILTRO_CONTINENTE):
+        estilo = curses.A_REVERSE if filter_selector[1] == idx else 0
+        filtros_seleccionados = filters_obj['continente']
+        if filtros_seleccionados == continente or (filtros_seleccionados is None and continente == 'Todos'):
+            estilo |= curses.A_BOLD
+
+        row = 4 + (idx // 4)
+        col = 4 + (20 * (idx % 4))
+
+        filters.addstr(row, col, continente, estilo)
+
+    # Filtro Rango Población
+    filters.addstr(7, 2, "Filtro Población",
+                   curses.A_UNDERLINE if filter_selector[0] == 1 else 0)
+    
+    filters.addstr(7, 19, f"{(int(width * 0.8)-21) * '-'}")
+
+    filters.addstr(8, 4, f"Min: {filters_obj['rango_poblacion'][0] or 'N/A'}")
+    filters.addstr(8, 40, f"Max: {filters_obj['rango_poblacion'][1] or 'N/A'}")
+
+    filters.addstr(10, 4, "Ordenar Mayor a menor",
+                   curses.A_UNDERLINE if filter_selector[0] == 2 else 0)
+    filters.addstr(
+        10, 26, f"{'[X]' if filters_obj['poblacion_orden'] == 'desc' else '[ ]'}")
+
+    filters.addstr(12, 4, "Ordenar Menor a mayor",
+                   curses.A_UNDERLINE if filter_selector[0] == 3 else 0)
+    filters.addstr(
+        12, 26, f"{'[X]' if filters_obj['poblacion_orden'] == 'asc' else '[ ]'}")
+
+    # Filtro Rango Superficie
+    filters.addstr(14, 2, "Rango Superficie",
+                   curses.A_UNDERLINE if filter_selector[0] == 4 else 0)
+    
+    filters.addstr(14, 19, f"{(int(width * 0.8)-21) * '-'}")
+
+    filters.addstr(
+        15, 4, f"Min: {filters_obj['rango_superficie'][0] or 'N/A'}")
+    filters.addstr(
+        15, 40, f"Max: {filters_obj['rango_superficie'][1] or 'N/A'}")
+
+    filters.addstr(17, 4, "Ordenar Mayor a menor",
+                   curses.A_UNDERLINE if filter_selector[0] == 5 else 0)
+    filters.addstr(
+        17, 26, f"{'[X]' if filters_obj['superficie_orden'] == 'desc' else '[ ]'}")
+
+    filters.addstr(19, 4, "Ordenar Menor a mayor",
+                   curses.A_UNDERLINE if filter_selector[0] == 6 else 0)
+    filters.addstr(
+        19, 26, f"{'[X]' if filters_obj['superficie_orden'] == 'asc' else '[ ]'}")
+
+    filters.addstr(
+        22, 2, "Presione F8 para cerrar los filtros. Enter para aplicar o intercalar.")
+
+    filters.refresh()
+
 ############################################################
 # Layout de la aplicación
 ############################################################
 
 
 def main_layout(
-    height: int, width: int, pag_num: int, paises: List[Dict[str, str]] | tuple[bool, str]
+    height: int,
+    width: int,
+    pag_num: int,
+    paises: List[Dict[str, str]] | tuple[bool, str],
+    search_query: str
 ) -> tuple[curses.window, curses.window, curses.window]:
     header_layout = main_header(width)
-    footer_layout = main_footer(width, height, pag_num)
+    footer_layout = main_footer(width, height, pag_num, search_query)
 
     main_layout = main_menu(
         width,
@@ -348,11 +526,31 @@ def add_layout(
     header_layout = main_header(width)
     footer_layout = main_footer(width, height, 0, action_active=True)
     add_layout = add_menu(width, height, nuevo_pais, status_msg, campo_actual)
+
     header_layout.refresh()
     add_layout.refresh()
     footer_layout.refresh()
 
     return header_layout, add_layout, footer_layout
+
+
+def update_layout(
+    height: int,
+    width: int,
+    nuevo_pais: Dict[str, str],
+    status_msg: str,
+    campo_actual: str
+) -> tuple[curses.window, curses.window, curses.window]:
+    header_layout = main_header(width)
+    footer_layout = main_footer(width, height, 0, action_active=True)
+    update_layout = update_menu(
+        width, height, nuevo_pais, status_msg, campo_actual)
+
+    header_layout.refresh()
+    update_layout.refresh()
+    footer_layout.refresh()
+
+    return header_layout, update_layout, footer_layout
 
 
 def main(main_window: curses.window) -> None:
@@ -389,6 +587,17 @@ def main(main_window: curses.window) -> None:
     # estado de mensajes
     status_msg = ""
 
+    # filters
+    mostrar_filtros = False
+    filters_obj = {
+        'continente': None,
+        'rango_poblacion': (None, None),
+        'poblacion_orden': None,
+        'rango_superficie': (None, None),
+        'superficie_orden': None
+    }
+    filter_selector = (0, 0)
+
     while True:
         paises = proceso_carga_datos(
             nombre=search_query
@@ -400,7 +609,7 @@ def main(main_window: curses.window) -> None:
 
         match screen:
             case 'main':
-                main_layout(height, width, pag_num, paises)
+                main_layout(height, width, pag_num, paises, search_query)
             case 'agregar_pais':
                 add_layout(
                     height,
@@ -412,22 +621,37 @@ def main(main_window: curses.window) -> None:
             case 'buscar_pais':
                 search_layout(height, width, search_query)
             case 'actualizar_pais':
-                pass
+                update_layout(
+                    height,
+                    width,
+                    esquema_de_nuevo_pais,
+                    status_msg,
+                    campo_actual
+                )
+
+        if mostrar_filtros:
+            filters_menu(width, height, filters_obj, filter_selector)
 
         user_input = main_window.getkey()
 
         match user_input:
             case 'KEY_F(2)':
+                if not search_query:
+                    screen = 'buscar_pais'
                 search_query = ""
-                screen = 'buscar_pais'
             case 'KEY_F(4)':
                 screen = 'agregar_pais'
             case 'KEY_F(7)':
                 screen = 'actualizar_pais'
+            case 'KEY_F(8)':
+                mostrar_filtros = not mostrar_filtros
+                filter_selector = (0, 0)
             case 'KEY_LEFT':
-                pag_num = max(0, pag_num - 1)
+                if not mostrar_filtros:
+                    pag_num = max(0, pag_num - 1)
             case 'KEY_RIGHT':
-                pag_num = min(total_paginas - 1, pag_num + 1)
+                if not mostrar_filtros:
+                    pag_num = min(total_paginas - 1, pag_num + 1)
             case 'KEY_F(10)':
                 if screen == 'main':
                     break
@@ -441,13 +665,18 @@ def main(main_window: curses.window) -> None:
                 screen, search_query, user_input)
 
         if screen == 'agregar_pais':
-            screen, esquema_de_nuevo_pais, status_msg, campo_actual = nuevo_pais(
+            screen, esquema_de_nuevo_pais, status_msg, campo_actual = editar_registrar_pais(
                 screen, user_input, campo_actual, esquema_de_nuevo_pais
             )
 
         if screen == 'actualizar_pais':
-            # Aquí se manejaría la lógica para actualizar un país
-            pass
+            screen, esquema_de_nuevo_pais, status_msg, campo_actual = editar_registrar_pais(
+                screen, user_input, campo_actual, esquema_de_nuevo_pais, edicion=True
+            )
+
+        if mostrar_filtros:
+            filters_obj, filter_selector = filtrar_paises(
+                user_input, filters_obj, filter_selector)
 
         main_window.clear()
         main_window.refresh()

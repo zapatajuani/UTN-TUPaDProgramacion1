@@ -10,11 +10,11 @@ def cantidad_de_paises(path: str) -> int:
         return sum(1 for _ in reader)
 
 
-def validar_pais(pais: Dict[str, str]) -> tuple[bool, str]:
+def validar_pais(pais: Dict[str, str], registro_nuevo: bool = True) -> tuple[bool, str]:
 
     paises = cargar_paises('paises.csv')
     for existente in paises:
-        if existente['nombre'].lower() == pais['nombre'].lower():
+        if existente['nombre'].lower() == pais['nombre'].lower() and registro_nuevo:
             return False, "El país ya existe en la base de datos."
 
     if pais['nombre'] is None or not pais['nombre'].replace(" ", "").isalpha():
@@ -57,7 +57,7 @@ def agregar_pais(nuevo_pais: Dict[str, str]) -> tuple[bool, str]:
 
 
 def actualizar_pais(datos_actualizados: Dict[str, str]) -> tuple[bool, str]:
-    es_valido, mensaje = validar_pais(datos_actualizados)
+    es_valido, mensaje = validar_pais(datos_actualizados, registro_nuevo=False)
     if not es_valido:
         return False, mensaje
 
