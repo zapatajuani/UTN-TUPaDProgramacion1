@@ -1,0 +1,4 @@
+lapicera,120.5,30
+cuaderno,250.0,15
+regla,80.75,50
+corrector,400.0,10
